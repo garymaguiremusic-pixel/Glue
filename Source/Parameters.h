@@ -102,7 +102,7 @@ namespace glue
                     [] (float v, int) { return formatDb (v); }, "dB");
         floatParam (ParamIDs::makeup, "Makeup", NormalisableRange<float> (0.0f, 20.0f, 0.01f), 0.0f,
                     [] (float v, int) { return formatDb (v); }, "dB");
-        floatParam (ParamIDs::range, "Range", skewedRange (kRangeMin, 0.0f, -15.0f), kRangeMin,
+        floatParam (ParamIDs::range, "Range", NormalisableRange<float> (kRangeMin, 0.0f, 0.01f), kRangeMin,
                     [] (float v, int) { return formatRange (v); }, "dB");
         choiceParam (ParamIDs::attack,  "Attack",  attackNames(),  2);
         choiceParam (ParamIDs::release, "Release", releaseNames(), 3);

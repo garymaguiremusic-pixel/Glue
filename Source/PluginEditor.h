@@ -6,13 +6,13 @@
 #include "UI/GlueComponents.h"
 
 //==============================================================================
-/** The whole user interface, laid out at its base size (600 x 400). The editor
+/** The whole user interface, laid out at its base size (360 x 716). The editor
     below scales it to the window size. */
 class GluePanel : public juce::Component,
                   private juce::Timer
 {
 public:
-    static constexpr int kBaseWidth = 600, kBaseHeight = 400;
+    static constexpr int kBaseWidth = 360, kBaseHeight = 716;
 
     explicit GluePanel (GlueAudioProcessor&);
     ~GluePanel() override;
@@ -24,29 +24,29 @@ private:
     void timerCallback() override;
     void createBackground();
     void drawWordmark (juce::Graphics&, juce::Rectangle<float> area);
+    static void drawCaption (juce::Graphics&, const juce::String&, juce::Rectangle<float> area, float size = 14.5f);
     float rawParam (const char* id) const;
 
     GlueAudioProcessor& processor;
     CustomLookAndFeel lnf;
     juce::Image background;
 
-    // Knobs
-    GlueKnob thresholdKnob { GlueKnob::Size::Large, "Threshold" };
-    GlueKnob makeupKnob    { GlueKnob::Size::Large, "Makeup" };
-    GlueKnob attackKnob    { GlueKnob::Size::Small, "Attack" };
-    GlueKnob releaseKnob   { GlueKnob::Size::Small, "Release" };
-    GlueKnob rangeKnob     { GlueKnob::Size::Small, "Range" };
-    GlueKnob mixKnob       { GlueKnob::Size::Small, "Mix" };
-    GlueKnob scHpfKnob     { GlueKnob::Size::Small, "SC HPF" };
+    // Knobs (name, large chrome?, sweep either side of vertical in radians, size)
+    GlueKnob thresholdKnob { "THRESHOLD", true, 2.35f, 1.15f };
+    GlueKnob rangeKnob     { "RANGE", false, 2.35f, 0.75f };
+    GlueKnob makeupKnob    { "MAKEUP", true, 2.35f, 1.15f };
+    GlueKnob attackKnob    { "ATTACK - ms", true, 2.0f, 1.15f };
+    GlueKnob ratioKnob     { "RATIO", false, 0.7f, 0.7f };
+    GlueKnob releaseKnob   { "RELEASE - s", true, 2.0f, 1.15f };
+    GlueKnob mixKnob       { "MIX", false, 2.35f, 0.75f };
+    GlueKnob hpKnob        { "HP", false, 2.35f, 0.8f };
 
-    std::unique_ptr<ChoiceButtons> ratioButtons;
-
-    juce::TextButton bypassButton { "Bypass" }, compInButton { "Comp In" }, peakClipButton { "Peak Clip" },
-                     extScButton { "Ext SC" }, noiseButton { "Analog" }, lowLatencyButton { "Low Latency" };
+    juce::TextButton compInButton { "Comp In" }, peakClipButton { "Peak Clip" }, extScButton { "Ext In" },
+                     noiseButton { "Analog" }, lowLatButton { "Low Latency" }, bypassButton { "Bypass" };
     juce::ComboBox presetBox, oversamplingBox;
 
-    LcdDisplay lcdThreshold, lcdMakeup, lcdGr, lcdPeak;
     GainReductionMeter meter;
+    LcdDisplay lcdGr, lcdPeak;
     HelpButton helpButton;
     HelpOverlay helpOverlay;
     juce::TooltipWindow tooltipWindow { this, 500 };
@@ -59,10 +59,9 @@ private:
     std::unique_ptr<ComboAttachment> oversamplingAttachment;
 
     // Layout / state
-    juce::Rectangle<float> compPanel, dynPanel, grPanel, rangePanel, scPanel, outPanel, scStatusArea, latencyArea;
-    juce::String scStatus, latencyText;
-    bool scStatusWarn = false;
-    int lastShownProgram = -1;
+    juce::Rectangle<float> meterPanel, scStatusArea;
+    juce::String scStatus;
+    int lastShownProgram = -1, lastLatency = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GluePanel)
 };

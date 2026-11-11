@@ -3,53 +3,80 @@
 
 using namespace juce;
 
+namespace
+{
+    const Colour kScaleText  { 0xffdfe3e6 };
+        constexpr float kMeterHalfSweep = 0.66f;   // radians either side of vertical
+
+    Point<float> polar (Point<float> c, float angle, float r)
+    {
+        return { c.x + std::sin (angle) * r, c.y - std::cos (angle) * r };
+    }
+}
+
 //==============================================================================
 // GlueKnob
 //==============================================================================
-GlueKnob::GlueKnob (Size s, const String& labelText)
-    : Slider (Slider::RotaryVerticalDrag, Slider::NoTextBox), knobSize (s), label (labelText)
+GlueKnob::GlueKnob (const String& name, bool largeChromeKnob, float sweepRadians, float scaleFactor)
+    : Slider (Slider::RotaryVerticalDrag, Slider::NoTextBox), title (name), large (largeChromeKnob),
+      sweep (sweepRadians), sizeScale (scaleFactor)
 {
-    setRotaryParameters (MathConstants<float>::pi * 1.25f, MathConstants<float>::pi * 2.75f, true);
-    setName (labelText);
+    setName (name);
 }
 
-String GlueKnob::currentValueText() const
+double GlueKnob::proportionOfLengthToValue (double proportion)
 {
-    return valueText ? valueText (getValue()) : String (getValue(), 2);
+    return Slider::proportionOfLengthToValue (reversed ? 1.0 - proportion : proportion);
+}
+
+double GlueKnob::valueToProportionOfLength (double value)
+{
+    const double p = Slider::valueToProportionOfLength (value);
+    return reversed ? 1.0 - p : p;
 }
 
 String GlueKnob::getTooltip()
 {
-    return label.toUpperCase() + "  " + currentValueText();
+    return title.toUpperCase() + "  " + (valueText ? valueText (getValue()) : String (getValue(), 2));
 }
 
 void GlueKnob::paint (Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const float pos = (float) valueToProportionOfLength (getValue());
-    const auto rotary = getRotaryParameters();
+    auto nameArea = bounds.removeFromBottom (18.0f);
 
-    Rectangle<float> knobArea;
-    if (knobSize == Size::Large)
+    // R = outer radius of the drawn knob (including its own tick ring)
+    const float R = std::max (12.0f, std::min ((bounds.getWidth() - 50.0f) * 0.5f, (bounds.getHeight() - 26.0f) * 0.5f) * sizeScale);
+    const Point<float> c (bounds.getCentreX(), bounds.getBottom() - R - 6.0f);
+
+    auto angleFor = [this] (double proportion) { return -sweep + 2.0f * sweep * (float) proportion; };
+
+    // scale numbers around the knob
+    const auto font = CustomLookAndFeel::uiFont (std::max (9.5f, std::min (11.5f, R * 0.26f)), true);
+    g.setFont (font);
+    for (auto& s : scale)
     {
-        knobArea = bounds;
-    }
-    else
-    {
-        auto valueArea = bounds.removeFromBottom (13.0f);
-        auto labelArea = bounds.removeFromBottom (13.0f);
-        const float side = std::min (bounds.getWidth(), bounds.getHeight());
-        knobArea = bounds.withSizeKeepingCentre (side, side);
-
-        CustomLookAndFeel::drawSmallLabel (g, label, labelArea);
-        g.setFont (CustomLookAndFeel::uiFont (11.0f, true));
-        g.setColour ((hovering || dragging) ? GlueColours::blue.brighter (0.3f) : GlueColours::blue);
-        g.drawFittedText (currentValueText(), valueArea.toNearestInt(), Justification::centred, 1, 0.7f);
+        const float a = angleFor (valueToProportionOfLength (s.value));
+        const float tw = GlyphArrangement::getStringWidth (font, s.text);
+        const float dist = R + 6.0f + std::abs (std::sin (a)) * tw * 0.5f + std::abs (std::cos (a)) * 3.0f;
+        const auto box = Rectangle<float> (tw + 4.0f, 13.0f).withCentre (polar (c, a, dist));
+        g.setColour (Colours::black.withAlpha (0.5f));
+        g.drawText (s.text, box.translated (0.0f, 1.0f), Justification::centred);
+        g.setColour (kScaleText);
+        g.drawText (s.text, box, Justification::centred);
     }
 
+    const auto knobArea = Rectangle<float> (R * 2.0f, R * 2.0f).withCentre (c);
     getLookAndFeel().drawRotarySlider (g, (int) knobArea.getX(), (int) knobArea.getY(),
                                        (int) knobArea.getWidth(), (int) knobArea.getHeight(),
-                                       pos, rotary.startAngleRadians, rotary.endAngleRadians, *this);
+                                       (float) valueToProportionOfLength (getValue()), -sweep, sweep, *this);
+
+    // name
+    g.setFont (CustomLookAndFeel::uiFont (14.0f, true));
+    g.setColour (Colours::black.withAlpha (0.6f));
+    g.drawText (title, nameArea.translated (0.0f, 1.0f), Justification::centred);
+    g.setColour (GlueColours::headerText.withMultipliedAlpha (isEnabled() ? 1.0f : 0.5f));
+    g.drawText (title, nameArea, Justification::centred);
 }
 
 void GlueKnob::setValueWithGesture (double v)
@@ -68,7 +95,6 @@ void GlueKnob::mouseDown (const MouseEvent& e)
     lastDragY = e.position.y;
     dragProportion = valueToProportionOfLength (getValue());
     if (onGestureBegin) onGestureBegin();
-    repaint();
 }
 
 void GlueKnob::mouseDrag (const MouseEvent& e)
@@ -96,7 +122,6 @@ void GlueKnob::mouseUp (const MouseEvent&)
 
     dragging = false;
     if (onGestureEnd) onGestureEnd();
-    repaint();
 }
 
 void GlueKnob::mouseDoubleClick (const MouseEvent&)
@@ -114,19 +139,11 @@ void GlueKnob::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& whe
     if (std::abs (dir) < 1.0e-6f)
         return;
 
-    if (isStepped())
-    {
-        setValueWithGesture (getValue() + (dir > 0.0f ? getInterval() : -getInterval()));
-        return;
-    }
-
-    const double step = e.mods.isShiftDown() ? 0.002 : 0.02;
+    const double step = isStepped() ? getInterval() / (getMaximum() - getMinimum())
+                                    : (e.mods.isShiftDown() ? 0.002 : 0.02);
     const double p = jlimit (0.0, 1.0, valueToProportionOfLength (getValue()) + (dir > 0.0f ? step : -step));
     setValueWithGesture (proportionOfLengthToValue (p));
 }
-
-void GlueKnob::mouseEnter (const MouseEvent&) { hovering = true;  repaint(); }
-void GlueKnob::mouseExit (const MouseEvent&)  { hovering = false; repaint(); }
 
 //==============================================================================
 // KnobAttachment
@@ -155,42 +172,6 @@ KnobAttachment::~KnobAttachment()
     knob.onGestureBegin = nullptr;
     knob.onGestureEnd = nullptr;
     knob.onValueChange = nullptr;
-}
-
-//==============================================================================
-// ChoiceButtons
-//==============================================================================
-ChoiceButtons::ChoiceButtons (RangedAudioParameter& p, const StringArray& labels, const String& tooltip)
-    : param (p),
-      attachment (p, [this] (float v)
-      {
-          const int index = roundToInt (v);
-          for (int i = 0; i < buttons.size(); ++i)
-              buttons[i]->setToggleState (i == index, dontSendNotification);
-      })
-{
-    for (int i = 0; i < labels.size(); ++i)
-    {
-        auto* b = buttons.add (new TextButton (labels[i]));
-        b->setTooltip (tooltip);
-        b->onClick = [this, i] { select (i); };
-        addAndMakeVisible (b);
-    }
-    attachment.sendInitialUpdate();
-}
-
-void ChoiceButtons::select (int index)
-{
-    attachment.setValueAsCompleteGesture ((float) index);
-}
-
-void ChoiceButtons::resized()
-{
-    const int n = buttons.size();
-    const int gap = 4;
-    const int w = (getWidth() - gap * (n - 1)) / jmax (1, n);
-    for (int i = 0; i < n; ++i)
-        buttons[i]->setBounds (i * (w + gap), 0, i == n - 1 ? getWidth() - i * (w + gap) : w, getHeight());
 }
 
 //==============================================================================
@@ -226,7 +207,6 @@ void LcdDisplay::paint (Graphics& g)
     const auto font = CustomLookAndFeel::uiFont (11.0f, true);
     g.setFont (font);
 
-    // value on the right; the name gets whatever is left (squeezed if needed)
     const float valueWidth = GlyphArrangement::getStringWidth (font, valueText) + 4.0f;
     auto nameArea = textArea.withTrimmedRight (valueWidth).toNearestInt();
 
@@ -241,12 +221,6 @@ void LcdDisplay::paint (Graphics& g)
 //==============================================================================
 // GainReductionMeter
 //==============================================================================
-float GainReductionMeter::dbToProportion (float db)
-{
-    // slightly expanded at the bottom so small amounts of glue are easy to read
-    return std::pow (jlimit (0.0f, 20.0f, db) / 20.0f, 0.7f);
-}
-
 void GainReductionMeter::setValues (float needleDb, float peakDb)
 {
     if (std::abs (needleDb - needle) > 0.01f || std::abs (peakDb - peak) > 0.05f)
@@ -259,90 +233,85 @@ void GainReductionMeter::setValues (float needleDb, float peakDb)
 
 void GainReductionMeter::paint (Graphics& g)
 {
-    const auto b = getLocalBounds().toFloat();
-    CustomLookAndFeel::drawInsetBox (g, b, 4.0f);
+    const auto face = getLocalBounds().toFloat();
+    CustomLookAndFeel::drawInsetBox (g, face, 4.0f);
+
+    Graphics::ScopedSaveState state (g);
+    {
+        Path clip;
+        clip.addRoundedRectangle (face.reduced (1.5f), 3.0f);
+        g.reduceClipRegion (clip);
+    }
 
     // faint blue backlight
-    g.setGradientFill (ColourGradient (GlueColours::blueGlow.withAlpha (0.10f), b.getCentreX(), b.getBottom(),
-                                       Colours::transparentBlack, b.getCentreX(), b.getY(), true));
-    g.fillRoundedRectangle (b.reduced (2.0f), 3.0f);
+    g.setGradientFill (ColourGradient (GlueColours::blueGlow.withAlpha (0.12f), face.getCentreX(), face.getBottom(),
+                                       Colours::transparentBlack, face.getCentreX(), face.getY(), true));
+    g.fillRect (face);
 
-    const Point<float> pivot (b.getCentreX(), b.getBottom() - 10.0f);
-    const float R = std::min (b.getWidth() * 0.42f, b.getHeight() - 42.0f);
-    constexpr float halfSweep = 1.0f;   // radians either side of vertical
+    const Point<float> pivot (face.getCentreX(), face.getBottom() + face.getHeight() * 0.55f);
+    const float rs = pivot.y - face.getY() - face.getHeight() * 0.36f;     // scale radius
+    const float halfSweep = kMeterHalfSweep;
+    auto angleFor = [halfSweep] (float db) { return -halfSweep + 2.0f * halfSweep * jlimit (0.0f, 20.0f, db) / 20.0f; };
 
-    // 0 dB at the right end, 20 dB at the left end
-    auto angleFor = [] (float db) { return halfSweep - 2.0f * halfSweep * dbToProportion (db); };
-    auto pointAt = [pivot] (float angle, float r) { return Point<float> (pivot.x + std::sin (angle) * r, pivot.y - std::cos (angle) * r); };
-
-    // scale track
+    // scale track + blue value arc (from 0 dB to the needle)
     Path track;
-    track.addCentredArc (pivot.x, pivot.y, R, R, 0.0f, -halfSweep, halfSweep, true);
+    track.addCentredArc (pivot.x, pivot.y, rs, rs, 0.0f, -halfSweep, halfSweep, true);
     g.setColour (Colour (0xff0a0c0e));
-    g.strokePath (track, PathStrokeType (6.0f, PathStrokeType::curved, PathStrokeType::rounded));
+    g.strokePath (track, PathStrokeType (7.0f, PathStrokeType::curved, PathStrokeType::rounded));
     g.setColour (Colour (0xff1a2633));
-    g.strokePath (track, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
+    g.strokePath (track, PathStrokeType (4.0f, PathStrokeType::curved, PathStrokeType::rounded));
 
-    // value arc (from 0 dB leftwards to the needle)
-    const float needleAngle = angleFor (needle);
+    const float na = angleFor (needle);
     if (needle > 0.05f)
     {
         Path value;
-        value.addCentredArc (pivot.x, pivot.y, R, R, 0.0f, needleAngle, halfSweep, true);
-        g.setColour (GlueColours::blueGlow.withAlpha (0.25f));
-        g.strokePath (value, PathStrokeType (9.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        value.addCentredArc (pivot.x, pivot.y, rs, rs, 0.0f, -halfSweep, na, true);
+        g.setColour (GlueColours::blueGlow.withAlpha (0.18f));
+        g.strokePath (value, PathStrokeType (12.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setColour (GlueColours::blueGlow.withAlpha (0.35f));
+        g.strokePath (value, PathStrokeType (7.5f, PathStrokeType::curved, PathStrokeType::rounded));
         g.setColour (GlueColours::blue);
-        g.strokePath (value, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.strokePath (value, PathStrokeType (4.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setColour (Colour (0xffc9e6ff).withAlpha (0.8f));
+        g.strokePath (value, PathStrokeType (1.2f, PathStrokeType::curved, PathStrokeType::rounded));
     }
 
     // ticks + numbers
-    g.setFont (CustomLookAndFeel::uiFont (9.0f, true));
-    for (float db : { 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f, 14.0f, 16.0f, 20.0f })
+    g.setFont (CustomLookAndFeel::uiFont (11.0f, true));
+    for (int db = 0; db <= 20; ++db)
     {
-        const bool major = db == 0.0f || db == 2.0f || db == 4.0f || db == 6.0f || db == 10.0f || db == 14.0f || db == 20.0f;
-        const float a = angleFor (db);
-        g.setColour (Colour (0xffb9c3cc).withAlpha (major ? 0.9f : 0.5f));
-        g.drawLine (Line<float> (pointAt (a, R + 5.0f), pointAt (a, R + (major ? 11.0f : 8.0f))), major ? 1.4f : 0.9f);
-
+        const bool major = db % 4 == 0, mid = db % 2 == 0;
+        const float a = angleFor ((float) db);
+        g.setColour (Colour (0xff9aa1a8).withAlpha (major ? 0.95f : 0.6f));
+        g.drawLine (Line<float> (polar (pivot, a, rs + 7.0f), polar (pivot, a, rs + (major ? 14.0f : (mid ? 11.0f : 9.5f)))),
+                    major ? 1.6f : 0.9f);
         if (major)
         {
-            const auto p = pointAt (a, R + 19.0f);
-            g.setColour (Colour (0xffc8cdd2));
-            g.drawText (String ((int) db), Rectangle<float> (20.0f, 10.0f).withCentre (p), Justification::centred);
+            g.setColour (Colour (0xffdfe3e6));
+            g.drawText (String (db), Rectangle<float> (26.0f, 13.0f).withCentre (polar (pivot, a, rs + 24.0f)), Justification::centred);
         }
     }
+
+    g.setFont (CustomLookAndFeel::uiFont (11.0f, true));
+    g.setColour (GlueColours::labelText);
+    g.drawText ("dB", face.withTrimmedTop (face.getHeight() * 0.66f).withHeight (14.0f), Justification::centred);
 
     // peak-hold marker
     if (peak > 0.05f)
     {
         const float a = angleFor (peak);
         Path tri;
-        const auto tip = pointAt (a, R - 4.0f);
-        const auto l = pointAt (a - 0.04f, R + 3.0f), r = pointAt (a + 0.04f, R + 3.0f);
-        tri.addTriangle (tip, l, r);
+        tri.addTriangle (polar (pivot, a, rs + 6.0f), polar (pivot, a - 0.02f, rs + 13.0f), polar (pivot, a + 0.02f, rs + 13.0f));
         g.setColour (Colour (0xffc9e6ff));
         g.fillPath (tri);
     }
 
-    // label
-    g.setFont (CustomLookAndFeel::uiFont (9.5f, true));
-    g.setColour (GlueColours::labelText.withAlpha (0.8f));
-    g.drawText ("GR dB", Rectangle<float> (b.getX() + 8.0f, b.getBottom() - 16.0f, 50.0f, 12.0f), Justification::centredLeft);
-
-    // needle
-    const auto tipPoint = pointAt (needleAngle, R + 2.0f);
-    const auto basePoint = pointAt (needleAngle, 8.0f);
+    // needle with blue glow
+    const auto tip = polar (pivot, na, rs + 12.0f);
     g.setColour (GlueColours::blueGlow.withAlpha (0.35f));
-    g.drawLine (Line<float> (basePoint, tipPoint), 4.5f);
+    g.drawLine (Line<float> (pivot, tip), 5.0f);
     g.setColour (Colour (0xffeef6ff));
-    g.drawLine (Line<float> (basePoint, tipPoint), 1.6f);
-
-    // pivot cap
-    const auto cap = Rectangle<float> (14.0f, 14.0f).withCentre (pivot);
-    g.setGradientFill (ColourGradient (Colour (0xff6a6f75), cap.getX(), cap.getY(), Colour (0xff141618), cap.getX(), cap.getBottom(), false));
-    g.fillEllipse (cap);
-    g.setColour (Colours::black.withAlpha (0.8f));
-    g.drawEllipse (cap, 0.8f);
+    g.drawLine (Line<float> (pivot, tip), 1.8f);
 }
 
 //==============================================================================
@@ -365,34 +334,38 @@ void HelpButton::paintButton (Graphics& g, bool isHighlighted, bool isDown)
 
 void HelpOverlay::paint (Graphics& g)
 {
-    g.fillAll (Colours::black.withAlpha (0.72f));
+    g.fillAll (Colours::black.withAlpha (0.78f));
 
-    auto box = getLocalBounds().toFloat().reduced (16.0f, 20.0f);
+    auto box = getLocalBounds().toFloat().reduced (12.0f, 40.0f);
     CustomLookAndFeel::drawPanel (g, box, "Glue - Quick Help");
 
     const char* lines[] =
     {
-        "THRESHOLD:  where compression starts (-40 .. 0 dB). The knee is soft and depends on the program",
-        "MAKEUP:  gain after compression (0 .. +20 dB), applied to the compressed (wet) signal only",
-        "ATTACK / RELEASE:  stepped like the hardware. AUTO release = fast recovery with a slow tail",
-        "RATIO:  2:1, 4:1 or 10:1. The detector is a feedback design, so the ratio is program-dependent",
-        "RANGE:  maximum gain reduction. Fully left = Full (no limit)",
-        "MIX:  dry / compressed blend for parallel compression",
-        "SC HPF:  high-pass filter on the detector only (Off, 20 .. 500 Hz) - stops the low end pumping",
-        "EXT SC:  the detector listens to the plugin's sidechain input (no input connected = no compression)",
-        "COMP IN:  switches the gain change (and makeup) on/off. PEAK CLIP: soft clipper at -0.5 dBFS",
-        "OVERSAMPLING:  1x - 8x. LOW LATENCY uses minimum-phase IIR filters instead of linear-phase FIR",
-        "Knobs: drag, Shift = fine, scroll wheel, double-click = default. Drag the corner to resize.",
-        "Click the PEAK readout to reset the peak-hold marker.",
+        "THRESHOLD:  turn right to compress more (0 .. -40 dB)",
+        "RANGE:  limits the gain reduction. Fully right = FULL",
+        "MAKEUP:  gain on the compressed signal (0 .. +20 dB)",
+        "ATTACK (ms) / RELEASE (s):  stepped. A = auto release",
+        "RATIO:  2:1, 4:1, 10:1 (soft, program-dependent knee)",
+        "COMP IN:  gain change + makeup on/off",
+        "MIX:  dry / wet blend for parallel compression",
+        "PEAK CLIP:  soft clipper, ceiling -0.5 dBFS",
+        "HP:  sidechain high-pass (detector only), OFF .. 500 Hz",
+        "EXT IN:  detector listens to the sidechain input",
+        "ANALOG:  circuit noise in the detector",
+        "LOW LAT:  IIR oversampling filters (less latency)",
+        "Top right: oversampling 1x - 8x",
+        "Click the meter to reset the peak marker",
+        "Knobs: drag, Shift = fine, wheel, double-click = default",
+        "Drag the bottom-right corner to resize",
         "",
         "Click anywhere to close."
     };
 
     auto text = box.reduced (12.0f, 0.0f).withTrimmedTop (30.0f);
-    g.setFont (CustomLookAndFeel::uiFont (11.0f));
+    g.setFont (CustomLookAndFeel::uiFont (11.5f));
     for (auto* line : lines)
     {
         g.setColour (String (line).startsWith ("Click anywhere") ? GlueColours::blue : Colour (0xffdfe3e6));
-        g.drawFittedText (line, text.removeFromTop (21.0f).toNearestInt(), Justification::centredLeft, 1, 0.8f);
+        g.drawFittedText (line, text.removeFromTop (27.0f).toNearestInt(), Justification::centredLeft, 2, 0.8f);
     }
 }

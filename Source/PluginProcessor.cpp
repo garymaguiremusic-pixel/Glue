@@ -127,9 +127,9 @@ void GlueAudioProcessor::updateDspParameters() noexcept
     comp.setRange ((double) pRange->load() <= glue::kRangeMin + 0.01 ? -106.0 : (double) pRange->load());
     comp.setMix ((double) pMix->load());
     comp.setScHpf ((double) pScHpf->load());
-    comp.setAttack ((int) pAttack->load());
-    comp.setRelease ((int) pRelease->load());
-    comp.setRatio ((int) pRatio->load());
+    comp.setAttack (roundToInt (pAttack->load()));   // stepped: always exactly one of the listed settings
+    comp.setRelease (roundToInt (pRelease->load()));   // stepped: always exactly one of the listed settings
+    comp.setRatio (roundToInt (pRatio->load()));   // stepped: always exactly one of the listed settings
     comp.setCompIn (pCompIn->load() > 0.5f);
     comp.setPeakClip (pPeakClip->load() > 0.5f);
     comp.setDcBlock (pDcBlock->load() > 0.5f);

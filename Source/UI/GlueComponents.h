@@ -5,25 +5,31 @@
 
 //==============================================================================
 /**
-    Rotary knob in the Virus Delay style.
+    Rotary knob (chrome with a blue value arc, or a small black knob) with scale
+    numbers printed around it and its name underneath.
       - vertical drag (full range in 250 px), Shift = fine
       - scroll wheel, double-click = default
       - stepped parameters snap to their steps
-      - small knobs draw their label and their value underneath
-    Drawing is delegated to CustomLookAndFeel::drawRotarySlider.
+      - "reversed" knobs run from the parameter's maximum (left) to its minimum (right)
 */
 class GlueKnob : public juce::Slider
 {
 public:
-    enum class Size { Large, Small };
+    struct ScaleLabel { double value; juce::String text; };
 
-    GlueKnob (Size, const juce::String& labelText);
+    GlueKnob (const juce::String& name, bool largeChromeKnob, float sweepRadians = 2.35f, float sizeScale = 1.0f);
 
-    Size getKnobSize() const noexcept           { return knobSize; }
-    void setDefaultValue (double v) noexcept    { defaultValue = v; }
+    bool isLarge() const noexcept { return large; }
+
+    void setScale (std::vector<ScaleLabel> labels, int numTicks) { scale = std::move (labels); ticks = numTicks; repaint(); }
+    void setReversed (bool r) noexcept           { reversed = r; }
+    void setDefaultValue (double v) noexcept     { defaultValue = v; }
 
     std::function<void()> onGestureBegin, onGestureEnd;
-    std::function<juce::String (double)> valueText;   // e.g. "-12.0 dB"
+    std::function<juce::String (double)> valueText;   // tooltip text, e.g. "-12.0 dB"
+
+    double proportionOfLengthToValue (double proportion) override;
+    double valueToProportionOfLength (double value) override;
 
     juce::String getTooltip() override;
     void paint (juce::Graphics&) override;
@@ -32,21 +38,21 @@ public:
     void mouseUp (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
-    void mouseEnter (const juce::MouseEvent&) override;
-    void mouseExit (const juce::MouseEvent&) override;
-
-    juce::String currentValueText() const;
 
 private:
     void setValueWithGesture (double v);
     bool isStepped() const { return getInterval() >= 1.0; }
 
-    Size knobSize;
-    juce::String label;
+    juce::String title;
+    bool large;
+    float sweep, sizeScale;
+    std::vector<ScaleLabel> scale;
+    int ticks = 0;
+    bool reversed = false;
     double defaultValue = 0.0;
     float lastDragY = 0.0f;
     double dragProportion = 0.0;
-    bool dragging = false, hovering = false;
+    bool dragging = false;
 };
 
 //==============================================================================
@@ -63,23 +69,7 @@ private:
 };
 
 //==============================================================================
-/** Row of radio buttons bound to a choice parameter (e.g. Ratio 2 / 4 / 10). */
-class ChoiceButtons : public juce::Component
-{
-public:
-    ChoiceButtons (juce::RangedAudioParameter&, const juce::StringArray& labels, const juce::String& tooltip);
-    void resized() override;
-
-private:
-    void select (int index);
-
-    juce::RangedAudioParameter& param;
-    juce::OwnedArray<juce::TextButton> buttons;
-    juce::ParameterAttachment attachment;
-};
-
-//==============================================================================
-/** Blue LCD readout, e.g. "THRESHOLD   -12.0 dB". */
+/** Blue LCD readout, e.g. "GR   3.2 dB". */
 class LcdDisplay : public juce::Component
 {
 public:
@@ -96,21 +86,23 @@ private:
 };
 
 //==============================================================================
-/** Needle gain-reduction meter, 0..20 dB (needle rests on the right and swings left). */
-class GainReductionMeter : public juce::Component
+/** Gain-reduction needle meter (0..20 dB, left to right). Click to reset the peak marker. */
+class GainReductionMeter : public juce::Component,
+                           public juce::SettableTooltipClient
 {
 public:
     void setValues (float needleDb, float peakDb);
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override { if (onClick) onClick(); }
 
-    static float dbToProportion (float db);
+    std::function<void()> onClick;
 
 private:
     float needle = 0.0f, peak = 0.0f;
 };
 
 //==============================================================================
-/** Round "?" button in the bottom bar. */
+/** Round "?" button. */
 class HelpButton : public juce::Button
 {
 public:

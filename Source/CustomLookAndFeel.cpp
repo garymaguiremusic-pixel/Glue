@@ -49,7 +49,7 @@ void CustomLookAndFeel::drawRotarySlider (Graphics& g, int x, int y, int width, 
     auto area = Rectangle<int> (x, y, width, height).toFloat();
     auto* knob = dynamic_cast<GlueKnob*> (&slider);
 
-    if (knob != nullptr && knob->getKnobSize() == GlueKnob::Size::Large)
+    if (knob != nullptr && knob->isLarge())
         drawLargeKnob (g, area, pos, start, end);
     else
         drawSmallKnob (g, area, pos, start, end);

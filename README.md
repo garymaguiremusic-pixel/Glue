@@ -3,7 +3,7 @@
 A VCA bus compressor (VST3, Windows x64) built with JUCE 8. The DSP is a double-precision circuit model of a
 feedback-style bus compressor. It has a diode-OR peak detector solved with Newton–Raphson, 512-point ratio/rectifier
 tables, a 7.8 dB/V VCA, stepped attack/release, Range, Mix, a sidechain HPF, an external sidechain, an optional peak
-clipper and 1×–8× oversampling. The GUI uses the same look as Virus Delay and can be resized with the corner handle.
+clipper and 1×–8× oversampling. The GUI is a vertical hardware-style layout (big gain-reduction meter on top, scale values printed around the knobs) in the Virus Delay colours and controls. Attack, Release and Ratio are stepped and snap to the printed values. The window can be resized with the corner handle.
 It keeps a fixed aspect ratio, goes from 70 % to 250 %, and remembers its size.
 
 ## Download
