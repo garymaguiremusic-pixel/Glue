@@ -6,7 +6,7 @@ namespace
 {
     constexpr int kWidth = GluePanel::kBaseWidth, kHeight = GluePanel::kBaseHeight;
     constexpr int kTopBarH = 64;
-    constexpr float kBracketTop = 639.0f, kBracketBottom = 702.0f;
+    constexpr float kBracketTop = 681.0f, kBracketBottom = 744.0f;
 }
 
 //==============================================================================
@@ -32,6 +32,12 @@ GluePanel::GluePanel (GlueAudioProcessor& p)
     releaseKnob.setScale   ({ { 0, ".1" }, { 1, ".2" }, { 2, ".4" }, { 3, ".6" }, { 4, ".8" }, { 5, "1.2" }, { 6, "A" } }, 0);
     mixKnob.setScale       ({ { 0.0, "DRY" }, { 1.0, "WET" } }, 9);
     hpKnob.setScale        ({ { (double) glue::kScHpfOff - 1.0, "OFF" }, { 90.0, "90" }, { 500.0, "500" } }, 9);
+
+    // drag / wheel steps: 1 dB (Shift 0.1 dB), HP 10 Hz (Shift 1 Hz, below 20 Hz = Off), Mix 1 % (Shift 0.1 %)
+    for (auto* k : { &thresholdKnob, &rangeKnob, &makeupKnob })
+        k->setValueSteps (1.0, 0.1);
+    hpKnob.setValueSteps (10.0, 1.0, (double) glue::kScHpfOff);
+    mixKnob.setValueSteps (0.01, 0.001);
 
     const std::pair<GlueKnob*, const char*> knobs[] =
     {
@@ -129,26 +135,26 @@ void GluePanel::resized()
     lcdPeak.setBounds (182, 214, 160, 22);
 
     // threshold / range / makeup
-    thresholdKnob.setBounds (6, 248, 120, 128);
-    rangeKnob.setBounds (120, 268, 120, 116);
-    makeupKnob.setBounds (234, 248, 120, 128);
+    thresholdKnob.setBounds (6, 248, 120, 142);
+    rangeKnob.setBounds (120, 268, 120, 130);
+    makeupKnob.setBounds (234, 248, 120, 142);
 
     // attack / ratio / release
-    attackKnob.setBounds (6, 380, 120, 128);
-    ratioKnob.setBounds (120, 402, 120, 102);
-    releaseKnob.setBounds (234, 380, 120, 128);
+    attackKnob.setBounds (6, 394, 120, 142);
+    ratioKnob.setBounds (120, 416, 120, 116);
+    releaseKnob.setBounds (234, 394, 120, 142);
 
     // comp in / mix / peak clip
-    compInButton.setBounds (22, 534, 88, 26);
-    mixKnob.setBounds (120, 500, 120, 110);
-    peakClipButton.setBounds (250, 534, 88, 26);
+    compInButton.setBounds (22, 562, 88, 26);
+    mixKnob.setBounds (120, 528, 120, 124);
+    peakClipButton.setBounds (250, 562, 88, 26);
 
     // sidechain
-    hpKnob.setBounds (10, 594, 116, 100);
-    extScButton.setBounds (148, 626, 64, 26);
-    scStatusArea = { 130.0f, 658.0f, 100.0f, 12.0f };
-    noiseButton.setBounds (252, 610, 92, 24);
-    lowLatButton.setBounds (252, 640, 92, 24);
+    hpKnob.setBounds (10, 624, 116, 114);
+    extScButton.setBounds (148, 668, 64, 26);
+    scStatusArea = { 130.0f, 700.0f, 100.0f, 12.0f };
+    noiseButton.setBounds (252, 652, 92, 24);
+    lowLatButton.setBounds (252, 682, 92, 24);
 
     helpOverlay.setBounds (getLocalBounds());
 }

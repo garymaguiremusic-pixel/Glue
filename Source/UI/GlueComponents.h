@@ -8,7 +8,10 @@
     Rotary knob (chrome with a blue value arc, or a small black knob) with scale
     numbers printed around it and its name underneath.
       - vertical drag (full range in 250 px), Shift = fine
+      - optional value steps: drag and wheel move in whole steps (e.g. 1 dB, 10 Hz),
+        Shift = fine steps (0.1 dB, 1 Hz)
       - scroll wheel, double-click = default
+      - the current value is always shown under the name
       - stepped parameters snap to their steps
       - "reversed" knobs run from the parameter's maximum (left) to its minimum (right)
 */
@@ -25,8 +28,14 @@ public:
     void setReversed (bool r) noexcept           { reversed = r; }
     void setDefaultValue (double v) noexcept     { defaultValue = v; }
 
+    /** Drag/wheel steps (0 = continuous). Values below offBelow jump to the minimum (e.g. HP "Off"). */
+    void setValueSteps (double coarse, double fine, double offBelow = -1.0e30)
+    {
+        coarseStep = coarse; fineStep = fine; snapFloor = offBelow;
+    }
+
     std::function<void()> onGestureBegin, onGestureEnd;
-    std::function<juce::String (double)> valueText;   // tooltip text, e.g. "-12.0 dB"
+    std::function<juce::String (double)> valueText;   // shown under the name, e.g. "-12.0 dB"
 
     double proportionOfLengthToValue (double proportion) override;
     double valueToProportionOfLength (double value) override;
@@ -42,6 +51,8 @@ public:
 private:
     void setValueWithGesture (double v);
     bool isStepped() const { return getInterval() >= 1.0; }
+    bool hasValueSteps() const { return coarseStep > 0.0; }
+    double snapToStep (double v, bool fine) const;
 
     juce::String title;
     bool large;
@@ -52,6 +63,7 @@ private:
     double defaultValue = 0.0;
     float lastDragY = 0.0f;
     double dragProportion = 0.0;
+    double coarseStep = 0.0, fineStep = 0.0, snapFloor = -1.0e30;
     bool dragging = false;
 };
 

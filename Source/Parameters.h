@@ -57,7 +57,11 @@ namespace glue
         return (v > 0.0f ? "+" : "") + juce::String (v, decimals) + " dB";
     }
     inline juce::String formatRange (float v)  { return v <= kRangeMin + 0.05f ? juce::String ("Full") : formatDb (v); }
-    inline juce::String formatMix (float v)    { return juce::String (juce::roundToInt (v * 100.0f)) + " %"; }
+    inline juce::String formatMix (float v)
+    {
+        const float pct = std::round (v * 1000.0f) / 10.0f;   // 0.1 % resolution
+        return (std::abs (pct - std::round (pct)) < 0.05f ? juce::String (juce::roundToInt (pct)) : juce::String (pct, 1)) + " %";
+    }
     inline juce::String formatScHpf (float hz)
     {
         if (hz < kScHpfOff) return "Off";

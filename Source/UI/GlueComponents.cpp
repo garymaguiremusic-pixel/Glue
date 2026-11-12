@@ -43,6 +43,7 @@ String GlueKnob::getTooltip()
 void GlueKnob::paint (Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
+    auto valueArea = bounds.removeFromBottom (15.0f);
     auto nameArea = bounds.removeFromBottom (18.0f);
 
     // R = outer radius of the drawn knob (including its own tick ring)
@@ -77,6 +78,26 @@ void GlueKnob::paint (Graphics& g)
     g.drawText (title, nameArea.translated (0.0f, 1.0f), Justification::centred);
     g.setColour (GlueColours::headerText.withMultipliedAlpha (isEnabled() ? 1.0f : 0.5f));
     g.drawText (title, nameArea, Justification::centred);
+
+    // live value readout (always visible; brighter while dragging)
+    const String value = valueText ? valueText (getValue()) : String (getValue(), 1);
+    g.setFont (CustomLookAndFeel::uiFont (12.5f, true));
+    g.setColour (Colours::black.withAlpha (0.6f));
+    g.drawText (value, valueArea.translated (0.0f, 1.0f), Justification::centred);
+    g.setColour (dragging ? Colour (0xffc9e6ff) : GlueColours::blue);
+    g.drawText (value, valueArea, Justification::centred);
+}
+
+double GlueKnob::snapToStep (double v, bool fine) const
+{
+    if (v < snapFloor)
+        return getMinimum();                       // e.g. HP below 20 Hz = Off
+
+    const double step = fine ? fineStep : coarseStep;
+    double s = std::round (v / step) * step;
+    if (s < snapFloor)
+        s = snapFloor;
+    return jlimit (getMinimum(), getMaximum(), s);
 }
 
 void GlueKnob::setValueWithGesture (double v)
@@ -95,6 +116,7 @@ void GlueKnob::mouseDown (const MouseEvent& e)
     lastDragY = e.position.y;
     dragProportion = valueToProportionOfLength (getValue());
     if (onGestureBegin) onGestureBegin();
+    repaint();
 }
 
 void GlueKnob::mouseDrag (const MouseEvent& e)
@@ -107,12 +129,19 @@ void GlueKnob::mouseDrag (const MouseEvent& e)
     const double pixels = (double) (lastDragY - e.position.y);
     lastDragY = e.position.y;
 
-    const double perPixel = isStepped() ? 1.0 / 160.0 : (e.mods.isShiftDown() ? 1.0 / 2500.0 : 1.0 / 250.0);
+    const bool fine = e.mods.isShiftDown();
+    const double perPixel = isStepped() ? 1.0 / 160.0 : (fine ? 1.0 / 2500.0 : 1.0 / 250.0);
     dragProportion = jlimit (0.0, 1.0, dragProportion + pixels * perPixel);
 
-    const double v = proportionOfLengthToValue (dragProportion);
+    double v = proportionOfLengthToValue (dragProportion);
+    if (hasValueSteps())
+        v = snapToStep (v, fine);
+
     if (std::abs (v - getValue()) > 1.0e-9)
+    {
         setValue (v, sendNotificationSync);
+        repaint();
+    }
 }
 
 void GlueKnob::mouseUp (const MouseEvent&)
@@ -122,6 +151,7 @@ void GlueKnob::mouseUp (const MouseEvent&)
 
     dragging = false;
     if (onGestureEnd) onGestureEnd();
+    repaint();
 }
 
 void GlueKnob::mouseDoubleClick (const MouseEvent&)
@@ -138,6 +168,29 @@ void GlueKnob::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& whe
     const float dir = (wheel.isReversed ? -1.0f : 1.0f) * (std::abs (wheel.deltaY) > 0.0f ? wheel.deltaY : wheel.deltaX);
     if (std::abs (dir) < 1.0e-6f)
         return;
+
+    if (hasValueSteps())
+    {
+        // whole steps in value terms; "up" turns the knob clockwise (reversed knobs count down)
+        const bool fine = e.mods.isShiftDown();
+        const double step = fine ? fineStep : coarseStep;
+        const double sign = (dir > 0.0f ? 1.0 : -1.0) * (reversed ? -1.0 : 1.0);
+        const double current = getValue();
+
+        if (current < snapFloor)                   // from "Off": first notch up lands on the floor
+        {
+            if (sign > 0.0)
+                setValueWithGesture (snapFloor);
+            return;
+        }
+
+        // step from the current value to the next grid point in that direction
+        double target = sign > 0.0 ? std::floor (current / step + 1.0e-3) * step + step
+                                   : std::ceil (current / step - 1.0e-3) * step - step;
+        target = target < snapFloor ? getMinimum() : jlimit (getMinimum(), getMaximum(), target);
+        setValueWithGesture (target);
+        return;
+    }
 
     const double step = isStepped() ? getInterval() / (getMaximum() - getMinimum())
                                     : (e.mods.isShiftDown() ? 0.002 : 0.02);

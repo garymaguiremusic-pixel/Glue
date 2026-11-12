@@ -16,14 +16,14 @@ Every push to `main` builds the plugin on GitHub Actions. The zipped `Glue.vst3`
 
 | Control | Values |
 |---|---|
-| Threshold | −40 … 0 dB |
-| Makeup | 0 … +20 dB (applied to the compressed signal only) |
+| Threshold | −40 … 0 dB (drag/wheel 1 dB, Shift 0.1 dB) |
+| Makeup | 0 … +20 dB, applied to the compressed signal only (drag/wheel 1 dB, Shift 0.1 dB) |
 | Attack | 0.01, 0.1, 0.3, 1, 3, 10, 30 ms |
 | Release | 0.1, 0.2, 0.4, 0.6, 0.8, 1.2 s, Auto |
 | Ratio | 2:1, 4:1, 10:1 |
-| Range | Full, or −80 … 0 dB maximum gain reduction |
-| Mix | 0 … 100 % |
-| SC HPF | Off, 20 … 500 Hz (detector only) |
+| Range | Full, or −80 … 0 dB maximum gain reduction (drag/wheel 1 dB, Shift 0.1 dB) |
+| Mix | 0 … 100 % (drag/wheel 1 %, Shift 0.1 %) |
+| SC HPF | Off, 20 … 500 Hz, detector only (drag/wheel 10 Hz, Shift 1 Hz) |
 | Comp In / Peak Clip / Ext SC | switches |
 | Oversampling | 1×, 2× (default), 4×, 8×; Low Latency = IIR instead of linear-phase FIR |
 | Analog | circuit noise in the detector (default on) |

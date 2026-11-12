@@ -6,13 +6,13 @@
 #include "UI/GlueComponents.h"
 
 //==============================================================================
-/** The whole user interface, laid out at its base size (360 x 716). The editor
+/** The whole user interface, laid out at its base size (360 x 758). The editor
     below scales it to the window size. */
 class GluePanel : public juce::Component,
                   private juce::Timer
 {
 public:
-    static constexpr int kBaseWidth = 360, kBaseHeight = 716;
+    static constexpr int kBaseWidth = 360, kBaseHeight = 758;
 
     explicit GluePanel (GlueAudioProcessor&);
     ~GluePanel() override;
